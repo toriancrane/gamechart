@@ -1,24 +1,11 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Creates infrastructure resources for GameChart application.
 
-Parameters:
-  Repository:
-    Type: String
-    Description: GitHub repo URL
-    Default: https://github.com/toriancrane/gamechart
-
-  OauthToken:
-    Type: String
-    Description: GitHub OAuth Token
-    NoEcho: true
-    Default: hold
-
 Resources:
 
   AmplifyExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: CloudWatch-CrossAccountSharingRole
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -43,7 +30,12 @@ Resources:
       Description: GameChart Amplify App
       OauthToken: '{{resolve:secretsmanager:GithubAccessToken:SecretString:AccessToken}}'
       IAMServiceRole: !GetAtt AmplifyExecutionRole.Arn
-      Repository: !Ref Repository
+      Repository: '{{resolve:secretsmanager:GitHubRepoUrl:SecretString:Url}}'
+      EnvironmentVariables:
+        - Name: AMPLIFY_MONOREPO_APP_ROOT
+          Value: application
+        - Name: AMPLIFY_DIFF_DEPLOY
+          Value: false
       BuildSpec: |-
         version: 1
         applications:
