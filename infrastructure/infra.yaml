@@ -11,6 +11,7 @@ Parameters:
     Type: String
     Description: GitHub OAuth Token
     NoEcho: true
+    Default: hold
 
 Resources:
 
