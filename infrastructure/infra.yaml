@@ -19,6 +19,7 @@ Resources:
       OauthToken: String
       Repository: String
       Tags: 
-        - Tag
+        - Key: 'Name'
+          Value: 'GameChart'
 
   
