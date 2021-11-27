@@ -2,24 +2,75 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: Creates infrastructure resources for GameChart application.
 
 Parameters:
-  MonitoringAccountIds:
-    Description: Allows one or more monitoring accounts to view your data. Enter AWS account ids, 12 numeric digits in comma-separated list
-    Type: CommaDelimitedList
+  Repository:
+    Type: String
+    Description: GitHub repo URL
+    Default: https://github.com/toriancrane/gamechart
 
+  OauthToken:
+    Type: String
+    Description: GitHub OAuth Token
+    NoEcho: true
 
 Resources:
 
-  GameChartApp:
+  AmplifyExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: CloudWatch-CrossAccountSharingRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: amplify.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: Amplify
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: "amplify:*"
+                Resource: "*"
+
+  AmplifyApp:
     Type: AWS::Amplify::App
     Properties:
       Name: GameChartApp
       Description: GameChart Amplify App
-      AccessToken: '{{resolve:secretsmanager:GithubAccessToken:SecretString:AccessToken}}'
-      IAMServiceRole: String
-      OauthToken: String
-      Repository: String
-      Tags: 
-        - Key: 'Name'
-          Value: 'GameChart'
+      OauthToken: '{{resolve:secretsmanager:GithubAccessToken:SecretString:AccessToken}}'
+      IAMServiceRole: !GetAtt AmplifyExecutionRole.Arn
+      Repository: !Ref Repository
+      BuildSpec: |-
+        version: 1
+        applications:
+          - frontend:
+              phases:
+                preBuild:
+                  commands:
+                    - npm install
+                build:
+                  commands:
+                    - npm run build
+              artifacts:
+                baseDirectory: build
+                files:
+                  - '**/*'
+              cache:
+                paths:
+                  - node_modules/**/*
+            appRoot: application
 
-  
+  AmplifyBranch:
+    Type: AWS::Amplify::Branch
+    Properties:
+      BranchName: main
+      AppId: !GetAtt AmplifyApp.AppId
+      Description: Main Branch
+      EnableAutoBuild: true
+
+Outputs:
+  DefaultDomain:
+    Value: !GetAtt AmplifyApp.DefaultDomain
