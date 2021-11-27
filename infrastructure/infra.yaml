@@ -64,6 +64,247 @@ Resources:
       Description: Main Branch
       EnableAutoBuild: true
 
+  # DynamoDB Table
+  DynamoDBTableGAMES: 
+    Type: AWS::DynamoDB::Table
+    Properties: 
+      TableName: "Games"
+      AttributeDefinitions: 
+        - 
+          AttributeName: "GameId"
+          AttributeType: "S"
+        - 
+          AttributeName: "Platform"
+          AttributeType: "S"
+        - 
+          AttributeName: "GameName"
+          AttributeType: "S"
+        - 
+          AttributeName: "ReleaseYear"
+          AttributeType: "S"
+        - 
+          AttributeName: "ImageUrl"
+          AttributeType: "S"
+      KeySchema: 
+        - 
+          AttributeName: "GameId"
+          KeyType: "HASH"
+        - 
+          AttributeName: "Platform"
+          KeyType: "RANGE"
+      ProvisionedThroughput: 
+        ReadCapacityUnits: "5"
+        WriteCapacityUnits: "5"
+      GlobalSecondaryIndexes: 
+        - 
+          IndexName: "GameNamesByPlatform"
+          KeySchema: 
+            - 
+              AttributeName: "GameName"
+              KeyType: "HASH"
+          Projection: 
+            NonKeyAttributes: 
+              - "Platform"
+              - "GameId"
+            ProjectionType: "INCLUDE"
+          ProvisionedThroughput: 
+            ReadCapacityUnits: "5"
+            WriteCapacityUnits: "5"
+
+ # DynamoDB Table
+  DynamoDBTableUSERCOLLECTION: 
+    Type: AWS::DynamoDB::Table
+    Properties: 
+      TableName: "UserCollection"
+      AttributeDefinitions: 
+        - 
+          AttributeName: "UserId"
+          AttributeType: "S"
+        - 
+          AttributeName: "GameId#Platform"
+          AttributeType: "S"
+        - 
+          AttributeName: "GameStatus"
+          AttributeType: "S"
+      KeySchema: 
+        - 
+          AttributeName: "UserId"
+          KeyType: "HASH"
+        - 
+          AttributeName: "GameId#Platform"
+          KeyType: "RANGE"
+      ProvisionedThroughput: 
+        ReadCapacityUnits: "5"
+        WriteCapacityUnits: "5"
+      GlobalSecondaryIndexes: 
+        - 
+          IndexName: "GamesByUser"
+          KeySchema: 
+            - 
+              AttributeName: "UserId"
+              KeyType: "HASH"
+          Projection: 
+            NonKeyAttributes: 
+              - "GameId#Platform"
+              - "GameStatus"
+            ProjectionType: "INCLUDE"
+          ProvisionedThroughput: 
+            ReadCapacityUnits: "5"
+            WriteCapacityUnits: "5"
+
+  # Lambda IAM Role
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: DynamoDB
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: "dynamodb:*"
+                Resource: !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/*"
+
+  # Lambda function
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.9
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Handler: index.handler
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          import urllib3
+
+          http = urllib3.PoolManager()
+
+          def lambda_handler(event, context):
+            return {
+                'statusCode': 200,
+                'body': json.dumps('Placeholder')
+            }
+      Description: GameChart App Lambda Handler
+      TracingConfig:
+        Mode: Active
+
+# Cognito User Pool
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      UserPoolName: gamechart-userpool
+
+  # Cognito App Client
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: gamerchart-userpool-client
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      UserPoolId: !Ref UserPool
+
+  # API Gateway
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: gamechart-api
+      ProtocolType: HTTP
+
+  HttpApiAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref HttpApi
+      AuthorizerType: JWT
+      IdentitySource:
+        - "$request.header.Authorization"
+      JwtConfiguration:
+        Audience:
+          - !Ref UserPoolClient
+        Issuer: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}"
+      Name: JwtAuthorizer
+
+  HttpApiIntegrationGET:
+    Type: 'AWS::ApiGatewayV2::Integration'
+    Properties:
+      ApiId: !Ref HttpApi
+      Description: Lambda Integration
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Join
+        - ''
+        - - 'arn:'
+          - !Ref 'AWS::Partition'
+          - ':apigateway:'
+          - !Ref 'AWS::Region'
+          - ':lambda:path/2015-03-31/functions/'
+          - !GetAtt LambdaFunction.Arn
+          - /invocations
+      IntegrationMethod: GET
+      PayloadFormatVersion: '2.0'
+
+  HttpApiIntegrationPOST:
+    Type: 'AWS::ApiGatewayV2::Integration'
+    Properties:
+      ApiId: !Ref HttpApi
+      Description: Lambda Integration
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Join
+        - ''
+        - - 'arn:'
+          - !Ref 'AWS::Partition'
+          - ':apigateway:'
+          - !Ref 'AWS::Region'
+          - ':lambda:path/2015-03-31/functions/'
+          - !GetAtt LambdaFunction.Arn
+          - /invocations
+      IntegrationMethod: POST
+      PayloadFormatVersion: '2.0'
+
+  HttpApiRouteGET:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      AuthorizationType: JWT
+      AuthorizerId: !Ref HttpApiAuthorizer
+      RouteKey: GET /
+      Target: !Sub "integrations/${HttpApiIntegrationGET}"
+
+  HttpApiRoutePOST:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      AuthorizationType: JWT
+      AuthorizerId: !Ref HttpApiAuthorizer
+      RouteKey: POST /
+      Target: !Sub "integrations/${HttpApiIntegrationPOST}"
+
+  HttpApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      AutoDeploy: true
+      StageName: $default
+
+  # S3 Bucket
+  S3Bucket:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: gamechart-resources
+
 Outputs:
   DefaultDomain:
     Value: !GetAtt AmplifyApp.DefaultDomain
