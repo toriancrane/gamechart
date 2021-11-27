@@ -182,6 +182,13 @@ Resources:
     Properties:
       Name: gamechart-api
       ProtocolType: HTTP
+      CorsConfiguration:
+        AllowHeaders:
+          - Authorization
+        AllowMethods:
+          - '*'
+        AllowOrigins:
+          - https://*
 
   HttpApiAuthorizer:
     Type: AWS::ApiGatewayV2::Authorizer
@@ -196,25 +203,7 @@ Resources:
         Issuer: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}"
       Name: JwtAuthorizer
 
-  HttpApiIntegrationGET:
-    Type: 'AWS::ApiGatewayV2::Integration'
-    Properties:
-      ApiId: !Ref HttpApi
-      Description: Lambda Integration
-      IntegrationType: AWS_PROXY
-      IntegrationUri: !Join
-        - ''
-        - - 'arn:'
-          - !Ref 'AWS::Partition'
-          - ':apigateway:'
-          - !Ref 'AWS::Region'
-          - ':lambda:path/2015-03-31/functions/'
-          - !GetAtt LambdaFunction.Arn
-          - /invocations
-      IntegrationMethod: GET
-      PayloadFormatVersion: '2.0'
-
-  HttpApiIntegrationPOST:
+  HttpApiIntegration:
     Type: 'AWS::ApiGatewayV2::Integration'
     Properties:
       ApiId: !Ref HttpApi
@@ -231,24 +220,24 @@ Resources:
           - /invocations
       IntegrationMethod: POST
       PayloadFormatVersion: '2.0'
-
-  HttpApiRouteGET:
+  
+  HttpApiRouteGETCOLLECTION:
     Type: AWS::ApiGatewayV2::Route
     Properties:
       ApiId: !Ref HttpApi
       AuthorizationType: JWT
       AuthorizerId: !Ref HttpApiAuthorizer
-      RouteKey: GET /
-      Target: !Sub "integrations/${HttpApiIntegrationGET}"
+      RouteKey: GET /getcollection
+      Target: !Sub "integrations/${HttpApiIntegration}"
 
-  HttpApiRoutePOST:
+  HttpApiRouteSIGNUP:
     Type: AWS::ApiGatewayV2::Route
     Properties:
       ApiId: !Ref HttpApi
       AuthorizationType: JWT
       AuthorizerId: !Ref HttpApiAuthorizer
-      RouteKey: POST /
-      Target: !Sub "integrations/${HttpApiIntegrationPOST}"
+      RouteKey: POST /signup
+      Target: !Sub "integrations/${HttpApiIntegration}"
 
   HttpApiStage:
     Type: AWS::ApiGatewayV2::Stage
