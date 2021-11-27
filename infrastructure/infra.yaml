@@ -123,6 +123,8 @@ Resources:
               Service: lambda.amazonaws.com
             Action:
               - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
         - PolicyName: DynamoDB
           PolicyDocument:
@@ -147,7 +149,7 @@ Resources:
 
           http = urllib3.PoolManager()
 
-          def lambda_handler(event, context):
+          def handler(event, context):
             return {
                 'statusCode': 200,
                 'body': json.dumps('Placeholder')
@@ -184,11 +186,11 @@ Resources:
       ProtocolType: HTTP
       CorsConfiguration:
         AllowHeaders:
-          - Authorization
+          - '*'
         AllowMethods:
           - '*'
         AllowOrigins:
-          - https://*
+          - '*'
 
   HttpApiAuthorizer:
     Type: AWS::ApiGatewayV2::Authorizer
@@ -245,6 +247,14 @@ Resources:
       ApiId: !Ref HttpApi
       AutoDeploy: true
       StageName: $default
+
+  HttpApiInvokeLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt LambdaFunction.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*/'
 
   # S3 Bucket
   S3Bucket:
