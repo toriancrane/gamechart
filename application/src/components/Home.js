@@ -14,10 +14,13 @@ import { POSTER_SIZE, BACKDROP_SIZE, IMAGE_BASE_URL } from '../config';
 
 
 
+
 const Home = () => {
     const [state, setState] = useState();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(false);
+    
+    let games;
     
     const searchGame = async (searchTerm='Animal') => {
         try {
@@ -25,7 +28,7 @@ const Home = () => {
             setError(false);
             setLoading(true);
             
-            const games = await API.searchGame(searchTerm);
+            games = await API.searchGame(searchTerm);
             
             console.log(games);
             
@@ -41,7 +44,11 @@ const Home = () => {
         searchGame()
     }, [])
 
-    return <div> Home Page! </div>
+    return (
+        <div> 
+            Home Page!
+        </div>
+    )
 }
 
 export default Home;
